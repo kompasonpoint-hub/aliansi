@@ -1,6 +1,7 @@
 # =========================================================
 # PROFESSIONAL FOOTBALL BETTING ANALYZER
-# SUPER FAST + PROFESSIONAL ANALYSIS ENGINE
+# FULL MAIN.PY
+# OPTIMIZED FOR INDONESIAN LEAGUE
 # =========================================================
 
 import asyncio
@@ -8,6 +9,7 @@ import aiohttp
 import statistics
 
 from datetime import datetime
+from urllib.parse import quote
 
 from aiogram import Bot, Dispatcher
 from aiogram.types import Message
@@ -19,8 +21,8 @@ from cachetools import TTLCache
 # CONFIG
 # =========================================================
 
-BOT_TOKEN = "8962278856:AAEVOkunN5NY3qlgl_SFwXpBgkWPGQGBqro"
-GROQ_API_KEY = "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"
+BOT_TOKEN = "ISI_BOT_TOKEN"
+GROQ_API_KEY = "ISI_GROQ_API"
 
 SOFA_API = "https://api.sofascore.com/api/v1"
 
@@ -43,7 +45,42 @@ team_cache = TTLCache(maxsize=500, ttl=3600)
 match_cache = TTLCache(maxsize=500, ttl=300)
 
 # =========================================================
-# AI SYSTEM PROMPT
+# TEAM ALIASES
+# =========================================================
+
+TEAM_ALIASES = {
+
+    # INDONESIA
+    "persib": "Persib Bandung",
+    "persija": "Persija Jakarta",
+    "persebaya": "Persebaya Surabaya",
+    "psm": "PSM Makassar",
+    "psis": "PSIS Semarang",
+    "persik": "Persik Kediri",
+    "persita": "Persita Tangerang",
+    "persis": "Persis Solo",
+    "arema": "Arema FC",
+    "borneo": "Borneo FC",
+    "bali": "Bali United",
+    "dewa": "Dewa United",
+    "malut": "Malut United",
+    "barito": "Barito Putera",
+    "semen padang": "Semen Padang",
+    "madura": "Madura United",
+    "pss": "PSS Sleman",
+
+    # EUROPE
+    "madrid": "Real Madrid",
+    "barca": "Barcelona",
+    "mu": "Manchester United",
+    "city": "Manchester City",
+    "inter": "Inter",
+    "milan": "AC Milan",
+    "juve": "Juventus",
+}
+
+# =========================================================
+# SYSTEM PROMPT
 # =========================================================
 
 SYSTEM_PROMPT = """
@@ -61,19 +98,18 @@ Rules:
 - never invent missing data
 - never exaggerate
 - avoid gambling slang
-- confidence must reflect data quality
+- confidence must reflect actual data quality
 
-Forbidden words:
+Forbidden:
 - guaranteed win
-- lock
-- easy money
-- free win
-- sure bet
+- lock bet
+- free money
+- easy win
+- sure win
 
 Tone:
 - professional
 - concise
-- data-driven
 - sportsbook analyst style
 
 OUTPUT FORMAT:
@@ -115,7 +151,10 @@ async def fetch_json(url):
 
             return await r.json()
 
-    except:
+    except Exception as e:
+
+        print("FETCH ERROR:", e)
+
         return {}
 
 # =========================================================
@@ -124,10 +163,23 @@ async def fetch_json(url):
 
 async def search_team(name):
 
-    if name in team_cache:
-        return team_cache[name]
+    original_input = name
 
-    url = f"{SOFA_API}/search/teams?q={name}"
+    name = name.lower().strip()
+
+    # alias
+    name = TEAM_ALIASES.get(name, name)
+
+    cache_key = name.lower()
+
+    # cache
+    if cache_key in team_cache:
+        return team_cache[cache_key]
+
+    # encode url
+    query = quote(name)
+
+    url = f"{SOFA_API}/search/teams?q={query}"
 
     data = await fetch_json(url)
 
@@ -136,34 +188,92 @@ async def search_team(name):
     if not results:
         return None
 
-    indonesia_priority = []
+    candidates = []
 
     for item in results:
 
-        entity = item.get("entity", {})
+        try:
 
-        country = entity.get(
-            "country",
-            {}
-        ).get("name", "")
+            entity = item.get("entity", {})
 
-        if "Indonesia" in country:
-            indonesia_priority.append(entity)
+            team_name = entity.get(
+                "name",
+                ""
+            )
 
-    entity = (
-        indonesia_priority[0]
-        if indonesia_priority
-        else results[0]["entity"]
+            slug = entity.get(
+                "slug",
+                ""
+            )
+
+            country = entity.get(
+                "country",
+                {}
+            ).get("name", "")
+
+            lname = team_name.lower()
+            lslug = slug.lower()
+            linput = name.lower()
+
+            score = 0
+
+            # exact
+            if linput == lname:
+                score += 100
+
+            # partial
+            if linput in lname:
+                score += 50
+
+            # slug
+            if linput in lslug:
+                score += 30
+
+            # indonesia priority
+            if "Indonesia" in country:
+                score += 40
+
+            # startswith
+            if lname.startswith(linput):
+                score += 25
+
+            # exact word
+            if linput in lname.split():
+                score += 20
+
+            candidates.append({
+
+                "score": score,
+
+                "team": {
+
+                    "id": entity["id"],
+                    "name": entity["name"],
+                    "country": country
+                }
+            })
+
+        except:
+            continue
+
+    if not candidates:
+        return None
+
+    candidates.sort(
+        key=lambda x: x["score"],
+        reverse=True
     )
 
-    result = {
-        "id": entity["id"],
-        "name": entity["name"]
-    }
+    best = candidates[0]["team"]
 
-    team_cache[name] = result
+    team_cache[cache_key] = best
 
-    return result
+    print(
+        f"[SEARCH] "
+        f"{original_input} -> {best['name']}"
+    )
+
+    return best
 
 # =========================================================
 # NEXT MATCH
@@ -186,12 +296,17 @@ async def get_next_match(team_id):
     m = events[0]
 
     result = {
+
         "id": m["id"],
+
         "home": m["homeTeam"]["name"],
         "home_id": m["homeTeam"]["id"],
+
         "away": m["awayTeam"]["name"],
         "away_id": m["awayTeam"]["id"],
+
         "league": m["tournament"]["name"],
+
         "time": datetime.fromtimestamp(
             m["startTimestamp"]
         ).strftime("%d-%m-%Y %H:%M")
@@ -228,14 +343,14 @@ async def get_last_matches(team_id, limit=10):
             hs = m["homeScore"]["current"]
             aw = m["awayScore"]["current"]
 
-            home = m["homeTeam"]["name"]
-            away = m["awayTeam"]["name"]
-
             matches.append({
-                "home": home,
-                "away": away,
+
+                "home": m["homeTeam"]["name"],
+                "away": m["awayTeam"]["name"],
+
                 "hs": hs,
                 "aw": aw,
+
                 "home_id": m["homeTeam"]["id"],
                 "away_id": m["awayTeam"]["id"]
             })
@@ -255,7 +370,7 @@ async def get_h2h(home_id, away_id):
 
     data = await fetch_json(url)
 
-    results = []
+    result = []
 
     for m in data.get("events", []):
 
@@ -270,24 +385,22 @@ async def get_h2h(home_id, away_id):
                 (h == away_id and a == home_id)
             ):
 
-                hs = m["homeScore"]["current"]
-                aw = m["awayScore"]["current"]
+                result.append({
 
-                results.append({
-                    "hs": hs,
-                    "aw": aw
+                    "hs": m["homeScore"]["current"],
+                    "aw": m["awayScore"]["current"]
                 })
 
         except:
             continue
 
-        if len(results) >= 5:
+        if len(result) >= 5:
             break
 
-    return results
+    return result
 
 # =========================================================
-# ANALYTICS ENGINE
+# TEAM STATS
 # =========================================================
 
 def calculate_team_stats(matches, team_id):
@@ -326,11 +439,11 @@ def calculate_team_stats(matches, team_id):
         else:
             losses += 1
 
-        # over 2.5
+        # over
         if (gf + ga) >= 3:
             over25 += 1
 
-        # BTTS
+        # btts
         if gf > 0 and ga > 0:
             btts += 1
 
@@ -410,14 +523,14 @@ def generate_recommendation(home, away, h2h):
 
     score = 0
 
-    # HOME EDGE
+    # home edge
     if home["win_rate"] >= 60:
         score += 2
 
     if away["avg_goals_against"] >= 1.5:
         score += 1
 
-    # GOAL TREND
+    # goal trends
     if home["over25_rate"] >= 60:
         score += 1
 
@@ -434,7 +547,7 @@ def generate_recommendation(home, away, h2h):
         away["btts_rate"] >= 60
     )
 
-    # MAIN PICK
+    # picks
     if score >= 5:
         main_pick = "Home Win"
     elif score >= 3:
@@ -453,9 +566,13 @@ def generate_recommendation(home, away, h2h):
     confidence = min(85, 50 + (score * 5))
 
     return {
+
         "main_pick": main_pick,
+
         "safer_pick": safer_pick,
+
         "risky_pick": risky_pick,
+
         "confidence": confidence
     }
 
@@ -473,18 +590,24 @@ async def ask_ai(prompt):
     }
 
     payload = {
+
         "model": "llama-3.3-70b-versatile",
+
         "messages": [
+
             {
                 "role": "system",
                 "content": SYSTEM_PROMPT
             },
+
             {
                 "role": "user",
                 "content": prompt
             }
         ],
+
         "temperature": 0.2,
+
         "max_tokens": 900
     }
 
@@ -502,17 +625,20 @@ async def ask_ai(prompt):
             return data["choices"][0]["message"]["content"]
 
     except Exception as e:
+
         return f"AI Error: {e}"
 
 # =========================================================
-# PROMPT BUILDER
+# PROMPT
 # =========================================================
 
-def build_prompt(match,
-                 home_stats,
-                 away_stats,
-                 h2h_stats,
-                 recommendation):
+def build_prompt(
+    match,
+    home_stats,
+    away_stats,
+    h2h_stats,
+    recommendation
+):
 
     return f"""
 MATCH:
@@ -521,7 +647,7 @@ MATCH:
 LEAGUE:
 {match['league']}
 
-HOME TEAM STATS:
+HOME TEAM:
 - Win Rate: {home_stats['win_rate']}%
 - Avg Goals Scored: {home_stats['avg_goals_for']}
 - Avg Goals Conceded: {home_stats['avg_goals_against']}
@@ -529,7 +655,7 @@ HOME TEAM STATS:
 - BTTS Rate: {home_stats['btts_rate']}%
 - Clean Sheet Rate: {home_stats['clean_sheet_rate']}%
 
-AWAY TEAM STATS:
+AWAY TEAM:
 - Win Rate: {away_stats['win_rate']}%
 - Avg Goals Scored: {away_stats['avg_goals_for']}
 - Avg Goals Conceded: {away_stats['avg_goals_against']}
@@ -537,7 +663,7 @@ AWAY TEAM STATS:
 - BTTS Rate: {away_stats['btts_rate']}%
 - Clean Sheet Rate: {away_stats['clean_sheet_rate']}%
 
-H2H STATS:
+H2H:
 - Over 2.5 Rate: {h2h_stats.get('over25_rate', 0)}%
 - BTTS Rate: {h2h_stats.get('btts_rate', 0)}%
 
@@ -548,9 +674,9 @@ MODEL PICKS:
 - Confidence: {recommendation['confidence']}
 
 TASK:
-Create professional betting analysis.
-Be objective.
-Mention risks.
+Create professional football betting analysis.
+Remain realistic.
+Mention uncertainty.
 Avoid exaggeration.
 """
 
@@ -562,7 +688,11 @@ Avoid exaggeration.
 async def start(message: Message):
 
     await message.answer(
-        "⚡ Professional Betting Analyzer Ready"
+        "⚡ Professional Betting Analyzer Ready\n\n"
+        "Example:\n"
+        "- Persib\n"
+        "- Persija\n"
+        "- Real Madrid"
     )
 
 # =========================================================
@@ -574,15 +704,18 @@ async def analyze(message: Message):
 
     team_name = message.text.strip()
 
+    if not team_name:
+        return
+
     if team_name.startswith("/"):
         return
 
     msg = await message.answer(
-        "⚡ Collecting data..."
+        "⚡ Searching team..."
     )
 
     # =====================================================
-    # TEAM
+    # SEARCH TEAM
     # =====================================================
 
     team = await search_team(team_name)
@@ -590,7 +723,12 @@ async def analyze(message: Message):
     if not team:
 
         await msg.edit_text(
-            "❌ Team not found"
+            "❌ Team not found.\n\n"
+            "Example:\n"
+            "- Persib\n"
+            "- Persija\n"
+            "- Persebaya\n"
+            "- Real Madrid"
         )
 
         return
@@ -599,12 +737,16 @@ async def analyze(message: Message):
     # MATCH
     # =====================================================
 
+    await msg.edit_text(
+        "⚡ Fetching match data..."
+    )
+
     match = await get_next_match(team["id"])
 
     if not match:
 
         await msg.edit_text(
-            "❌ No upcoming match"
+            f"❌ No upcoming match found for {team['name']}"
         )
 
         return
@@ -612,6 +754,10 @@ async def analyze(message: Message):
     # =====================================================
     # FETCH PARALLEL
     # =====================================================
+
+    await msg.edit_text(
+        "⚡ Calculating statistics..."
+    )
 
     home_matches, away_matches, h2h = await asyncio.gather(
 
@@ -670,7 +816,7 @@ async def analyze(message: Message):
     analysis = await ask_ai(prompt)
 
     # =====================================================
-    # FINAL MESSAGE
+    # FINAL
     # =====================================================
 
     final_text = f"""
@@ -707,7 +853,9 @@ async def main():
         timeout=timeout
     )
 
-    print("PROFESSIONAL BETTING ANALYZER RUNNING")
+    print(
+        "PROFESSIONAL BETTING ANALYZER RUNNING"
+    )
 
     await dp.start_polling(bot)
 
@@ -717,4 +865,15 @@ async def main():
 
 if __name__ == "__main__":
 
-    asyncio.run(main())
+    while True:
+
+        try:
+
+            asyncio.run(main())
+
+        except Exception as e:
+
+            print("MAIN ERROR:", e)
+
+            import time
+            time.sleep(5)
