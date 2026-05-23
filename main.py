@@ -1,7 +1,7 @@
 # =========================================================
 # MAIN.PY
-# FOOTBALL AI ANALYZER BOT
-# STABLE API VERSION (NO SCRAPING)
+# ULTRA FOOTBALL BETTING ANALYZER
+# PROFESSIONAL VERSION
 # =========================================================
 
 # =========================================================
@@ -31,9 +31,8 @@ from aiogram.filters import CommandStart
 # =========================================================
 
 BOT_TOKEN = "8962278856:AAEVOkunN5NY3qlgl_SFwXpBgkWPGQGBqro"
-GROQ_API_KEY = "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"
+GROQ_API_KEY = "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"I"
 
-# FREE PUBLIC API
 SPORTSDB_API = "https://www.thesportsdb.com/api/v1/json/3"
 
 # =========================================================
@@ -48,9 +47,9 @@ dp = Dispatcher()
 # =========================================================
 
 MENU = """
-⚽ FOOTBALL AI ANALYZER
+⚽ ULTRA FOOTBALL BETTING ANALYZER
 
-Ketik nama team:
+Ketik nama team.
 
 Contoh:
 - persib
@@ -59,14 +58,16 @@ Contoh:
 - manchester united
 
 FITUR:
-✅ Auto search team
-✅ Last matches
-✅ Next match
-✅ Goal statistics
+✅ last 10 matches
+✅ next match
+✅ form analysis
+✅ winrate
+✅ avg goals
+✅ clean sheet
+✅ BTTS
+✅ over under
 ✅ AI betting analysis
-✅ Over/Under trend
-✅ BTTS trend
-✅ Professional prediction
+✅ professional betting insight
 """
 
 # =========================================================
@@ -82,7 +83,10 @@ def search_team(team_name):
             f"?t={team_name}"
         )
 
-        r = requests.get(url, timeout=20)
+        r = requests.get(
+            url,
+            timeout=20
+        )
 
         data = r.json()
 
@@ -91,17 +95,60 @@ def search_team(team_name):
         if not teams:
             return None
 
-        team = teams[0]
+        query = (
+            team_name
+            .lower()
+            .strip()
+        )
+
+        best = None
+        best_score = -1
+
+        for t in teams:
+
+            name = (
+                t.get("strTeam", "")
+                .lower()
+            )
+
+            alt = (
+                t.get("strAlternate", "")
+                .lower()
+            )
+
+            score = 0
+
+            if query == name:
+                score += 1000
+
+            if query in name:
+                score += 500
+
+            if query in alt:
+                score += 300
+
+            for word in query.split():
+
+                if word in name:
+                    score += 100
+
+            if score > best_score:
+
+                best_score = score
+                best = t
+
+        if not best:
+            return None
 
         return {
 
-            "id": team.get("idTeam"),
+            "id": best.get("idTeam"),
 
-            "name": team.get("strTeam"),
+            "name": best.get("strTeam"),
 
-            "league": team.get("strLeague"),
+            "league": best.get("strLeague"),
 
-            "country": team.get("strCountry")
+            "country": best.get("strCountry")
         }
 
     except Exception as e:
@@ -111,7 +158,7 @@ def search_team(team_name):
         return None
 
 # =========================================================
-# GET LAST MATCHES
+# LAST MATCHES
 # =========================================================
 
 def get_last_matches(team_id):
@@ -123,7 +170,10 @@ def get_last_matches(team_id):
             f"?id={team_id}"
         )
 
-        r = requests.get(url, timeout=20)
+        r = requests.get(
+            url,
+            timeout=20
+        )
 
         data = r.json()
 
@@ -134,22 +184,41 @@ def get_last_matches(team_id):
 
         matches = []
 
-        for e in events[:5]:
+        for e in events[:10]:
 
             try:
 
-                hs = int(e["intHomeScore"])
-                aw = int(e["intAwayScore"])
+                hs = int(
+                    e["intHomeScore"]
+                )
+
+                aw = int(
+                    e["intAwayScore"]
+                )
 
                 matches.append({
 
-                    "home": e["strHomeTeam"],
+                    "home":
+                        e["strHomeTeam"],
 
-                    "away": e["strAwayTeam"],
+                    "away":
+                        e["strAwayTeam"],
 
                     "hs": hs,
 
-                    "aw": aw
+                    "aw": aw,
+
+                    "league":
+                        e.get(
+                            "strLeague",
+                            "-"
+                        ),
+
+                    "date":
+                        e.get(
+                            "dateEvent",
+                            "-"
+                        )
                 })
 
             except:
@@ -159,7 +228,7 @@ def get_last_matches(team_id):
 
     except Exception as e:
 
-        print("LAST MATCH ERROR:", e)
+        print("MATCH ERROR:", e)
 
         return []
 
@@ -176,7 +245,10 @@ def get_next_match(team_id):
             f"?id={team_id}"
         )
 
-        r = requests.get(url, timeout=20)
+        r = requests.get(
+            url,
+            timeout=20
+        )
 
         data = r.json()
 
@@ -189,30 +261,45 @@ def get_next_match(team_id):
 
         return {
 
-            "home": e.get("strHomeTeam"),
+            "home":
+                e.get(
+                    "strHomeTeam"
+                ),
 
-            "away": e.get("strAwayTeam"),
+            "away":
+                e.get(
+                    "strAwayTeam"
+                ),
 
-            "date": e.get("dateEvent"),
+            "date":
+                e.get(
+                    "dateEvent"
+                ),
 
-            "league": e.get("strLeague")
+            "league":
+                e.get(
+                    "strLeague"
+                )
         }
 
     except Exception as e:
 
-        print("NEXT MATCH ERROR:", e)
+        print("NEXT ERROR:", e)
 
         return None
 
 # =========================================================
-# CALCULATE STATS
+# CALCULATE ADVANCED STATS
 # =========================================================
 
 def calculate_stats(matches, team_name):
 
     try:
 
-        team_name = team_name.lower()
+        team_name = (
+            team_name
+            .lower()
+        )
 
         wins = 0
         draws = 0
@@ -221,14 +308,21 @@ def calculate_stats(matches, team_name):
         gf = []
         ga = []
 
+        over15 = 0
         over25 = 0
+        over35 = 0
+
         btts = 0
+
+        clean_sheet = 0
+
+        form = []
 
         for m in matches:
 
             is_home = (
-                team_name in
-                m["home"].lower()
+                team_name
+                in m["home"].lower()
             )
 
             scored = (
@@ -243,6 +337,11 @@ def calculate_stats(matches, team_name):
                 else m["hs"]
             )
 
+            total = (
+                scored +
+                conceded
+            )
+
             gf.append(scored)
             ga.append(conceded)
 
@@ -250,23 +349,35 @@ def calculate_stats(matches, team_name):
             if scored > conceded:
 
                 wins += 1
+                form.append("W")
 
             elif scored == conceded:
 
                 draws += 1
+                form.append("D")
 
             else:
 
                 losses += 1
+                form.append("L")
 
-            # OVER 2.5
-            if scored + conceded >= 3:
+            # CLEAN SHEET
+            if conceded == 0:
 
+                clean_sheet += 1
+
+            # OVER
+            if total >= 2:
+                over15 += 1
+
+            if total >= 3:
                 over25 += 1
+
+            if total >= 4:
+                over35 += 1
 
             # BTTS
             if scored > 0 and conceded > 0:
-
                 btts += 1
 
         played = len(matches)
@@ -281,9 +392,13 @@ def calculate_stats(matches, team_name):
 
             "losses": losses,
 
+            "form":
+                " ".join(form),
+
             "win_rate":
                 round(
-                    (wins / played) * 100,
+                    (wins / played)
+                    * 100,
                     1
                 ),
 
@@ -299,15 +414,41 @@ def calculate_stats(matches, team_name):
                     2
                 ),
 
-            "over25_rate":
+            "over15":
                 round(
-                    (over25 / played) * 100,
+                    (over15 / played)
+                    * 100,
                     1
                 ),
 
-            "btts_rate":
+            "over25":
                 round(
-                    (btts / played) * 100,
+                    (over25 / played)
+                    * 100,
+                    1
+                ),
+
+            "over35":
+                round(
+                    (over35 / played)
+                    * 100,
+                    1
+                ),
+
+            "btts":
+                round(
+                    (btts / played)
+                    * 100,
+                    1
+                ),
+
+            "clean_sheet":
+                round(
+                    (
+                        clean_sheet
+                        / played
+                    )
+                    * 100,
                     1
                 )
         }
@@ -319,10 +460,28 @@ def calculate_stats(matches, team_name):
         return None
 
 # =========================================================
-# GROQ AI
+# FORMAT MATCH LIST
 # =========================================================
 
-def ask_groq(team, stats, next_match):
+def format_matches(matches):
+
+    txt = ""
+
+    for m in matches[:5]:
+
+        txt += (
+            f"{m['home']} "
+            f"{m['hs']}-{m['aw']} "
+            f"{m['away']}\n"
+        )
+
+    return txt
+
+# =========================================================
+# PROFESSIONAL AI ANALYSIS
+# =========================================================
+
+def ask_groq(team, stats, next_match, matches):
 
     try:
 
@@ -340,44 +499,81 @@ def ask_groq(team, stats, next_match):
         }
 
         prompt = f"""
-You are a professional football betting analyst.
+You are an elite football betting analyst.
+
+IMPORTANT:
+- professional betting analysis
+- avoid hype
+- avoid random prediction
+- focus on data
+- realistic betting insight only
+- concise but sharp
+- use Indonesian language
+- professional bettor tone
 
 TEAM:
-{team}
+{team['name']}
+
+COUNTRY:
+{team['country']}
+
+LEAGUE:
+{team['league']}
 
 NEXT MATCH:
 {next_match}
 
+LAST MATCHES:
+{format_matches(matches)}
+
 STATISTICS:
+
+Form:
+{stats['form']}
 
 Win Rate:
 {stats['win_rate']}%
 
-Goals Scored:
+Average Goals Scored:
 {stats['avg_goals_for']}
 
-Goals Conceded:
+Average Goals Conceded:
 {stats['avg_goals_against']}
 
+Over 1.5:
+{stats['over15']}%
+
 Over 2.5:
-{stats['over25_rate']}%
+{stats['over25']}%
+
+Over 3.5:
+{stats['over35']}%
 
 BTTS:
-{stats['btts_rate']}%
+{stats['btts']}%
+
+Clean Sheet:
+{stats['clean_sheet']}%
 
 TASK:
 Create professional betting analysis.
 
-OUTPUT:
-- Form Analysis
-- Goal Trend
-- Betting Insight
-- Recommended Pick
-- Risk Level
-- Confidence 1-100
+MUST INCLUDE:
 
-Professional tone only.
-No hype.
+1. Match Reading
+2. Team Form
+3. Goal Trend
+4. Risk Analysis
+5. Value Bet
+6. 1X2
+7. Over/Under
+8. BTTS
+9. Asian Handicap
+10. Confidence Score
+
+NO EMOJI.
+NO OVERHYPE.
+NO CLICKBAIT.
 """
 
         payload = {
@@ -389,25 +585,30 @@ No hype.
 
                 {
                     "role": "user",
+
                     "content": prompt
                 }
             ],
 
-            "temperature": 0.3,
+            "temperature": 0.2,
 
-            "max_tokens": 500
+            "max_tokens": 900
         }
 
         r = requests.post(
             url,
             json=payload,
             headers=headers,
-            timeout=60
+            timeout=90
         )
 
         data = r.json()
 
-        return data["choices"][0]["message"]["content"]
+        return (
+            data["choices"][0]
+            ["message"]
+            ["content"]
+        )
 
     except Exception as e:
 
@@ -419,7 +620,13 @@ No hype.
 # FORMAT RESULT
 # =========================================================
 
-def format_result(team, stats, next_match, ai):
+def format_result(
+    team,
+    stats,
+    next_match,
+    matches,
+    ai
+):
 
     next_info = "No upcoming match"
 
@@ -433,27 +640,35 @@ def format_result(team, stats, next_match, ai):
         )
 
     return f"""
-🏆 TEAM ANALYSIS
-━━━━━━━━━━━━━━━
-
-⚽ Team:
+TEAM:
 {team['name']}
 
-🌍 Country:
+COUNTRY:
 {team['country']}
 
-🏆 League:
+LEAGUE:
 {team['league']}
 
-📅 NEXT MATCH
-━━━━━━━━━━━━━━━
+━━━━━━━━━━━━━━━━━━━
+NEXT MATCH
+━━━━━━━━━━━━━━━━━━━
 
 {next_info}
 
-📊 STATISTICS
-━━━━━━━━━━━━━━━
+━━━━━━━━━━━━━━━━━━━
+LAST MATCHES
+━━━━━━━━━━━━━━━━━━━
 
-Matches:
+{format_matches(matches)}
+
+━━━━━━━━━━━━━━━━━━━
+STATISTICS
+━━━━━━━━━━━━━━━━━━━
+
+Form:
+{stats['form']}
+
+Played:
 {stats['played']}
 
 Wins:
@@ -468,20 +683,30 @@ Losses:
 Win Rate:
 {stats['win_rate']}%
 
-Avg Goals Scored:
+Avg Goals:
 {stats['avg_goals_for']}
 
-Avg Goals Conceded:
+Avg Conceded:
 {stats['avg_goals_against']}
 
+Over 1.5:
+{stats['over15']}%
+
 Over 2.5:
-{stats['over25_rate']}%
+{stats['over25']}%
+
+Over 3.5:
+{stats['over35']}%
 
 BTTS:
-{stats['btts_rate']}%
+{stats['btts']}%
 
-🤖 AI ANALYSIS
-━━━━━━━━━━━━━━━
+Clean Sheet:
+{stats['clean_sheet']}%
+
+━━━━━━━━━━━━━━━━━━━
+AI BETTING ANALYSIS
+━━━━━━━━━━━━━━━━━━━
 
 {ai}
 """
@@ -516,23 +741,23 @@ async def analyze(message: Message):
             return
 
         msg = await message.answer(
-            "🔍 Searching team..."
+            "🔍 searching team..."
         )
 
-        # SEARCH TEAM
+        # SEARCH
         team = search_team(query)
 
         if not team:
 
             await msg.edit_text(
-                "❌ Team not found"
+                "❌ team not found"
             )
 
             return
 
-        # LAST MATCHES
+        # FETCH
         await msg.edit_text(
-            "⚡ Fetching statistics..."
+            "⚡ fetching statistics..."
         )
 
         matches = get_last_matches(
@@ -542,12 +767,11 @@ async def analyze(message: Message):
         if not matches:
 
             await msg.edit_text(
-                "❌ Match data unavailable"
+                "❌ statistics unavailable"
             )
 
             return
 
-        # NEXT MATCH
         next_match = get_next_match(
             team["id"]
         )
@@ -561,20 +785,21 @@ async def analyze(message: Message):
         if not stats:
 
             await msg.edit_text(
-                "❌ Failed calculating statistics"
+                "❌ failed calculate stats"
             )
 
             return
 
-        # AI ANALYSIS
+        # AI
         await msg.edit_text(
-            "🤖 AI analyzing..."
+            "🤖 analyzing betting data..."
         )
 
         ai = ask_groq(
-            team["name"],
+            team,
             stats,
-            next_match
+            next_match,
+            matches
         )
 
         # RESULT
@@ -582,6 +807,7 @@ async def analyze(message: Message):
             team,
             stats,
             next_match,
+            matches,
             ai
         )
 
@@ -594,7 +820,7 @@ async def analyze(message: Message):
         print("HANDLER ERROR:", e)
 
         await message.answer(
-            "❌ Internal error"
+            "❌ internal error"
         )
 
 # =========================================================
@@ -604,7 +830,7 @@ async def analyze(message: Message):
 async def main():
 
     print(
-        "FOOTBALL AI BOT RUNNING"
+        "ULTRA FOOTBALL BOT RUNNING"
     )
 
     await dp.start_polling(bot)
