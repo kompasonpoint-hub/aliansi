@@ -1,26 +1,35 @@
 # =========================================================
 # MAIN.PY
-# ULTRA FOOTBALL SCRAPER BOT
-# DIRECT FLASHSCORE SEARCH ENGINE
-# FIXED VERSION
+# ULTRA FOOTBALL AI ANALYZER BOT
+# FIXED FULL VERSION
 # =========================================================
 
-# INSTALL:
-# pip install aiogram requests cloudscraper beautifulsoup4 lxml
+# =========================================================
+# INSTALL DI RAILWAY / VPS
+# =========================================================
+#
+# requirements.txt
+#
+# aiogram
+# requests
+# beautifulsoup4
+# cloudscraper
+#
+# =========================================================
 
 # =========================================================
 # IMPORT
 # =========================================================
 
 import asyncio
-import json
-import re
 import statistics
+import re
 import time
-
+import requests
 import cloudscraper
 
 from bs4 import BeautifulSoup
+
 from aiogram import Bot, Dispatcher
 from aiogram.types import Message
 from aiogram.filters import CommandStart
@@ -29,25 +38,26 @@ from aiogram.filters import CommandStart
 # CONFIG
 # =========================================================
 
-BOT_TOKEN = "ISI_BOT_TOKEN"
+BOT_TOKEN = "8962278856:AAEVOkunN5NY3qlgl_SFwXpBgkWPGQGBqro"
+GROQ_API_KEY = "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"
+
+# =========================================================
+# HEADERS
+# =========================================================
 
 HEADERS = {
     "User-Agent":
     (
         "Mozilla/5.0 "
         "(Windows NT 10.0; Win64; x64)"
-    ),
-
-    "Accept":
-        "application/json,text/html"
+    )
 }
 
 # =========================================================
 # BOT
 # =========================================================
 
-BOT_TOKEN = "8962278856:AAEVOkunN5NY3qlgl_SFwXpBgkWPGQGBqro"
-GROQ_API_KEY = "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"
+bot = Bot(token=BOT_TOKEN)
 
 dp = Dispatcher()
 
@@ -58,7 +68,7 @@ scraper = cloudscraper.create_scraper()
 # =========================================================
 
 MENU = """
-⚽ FOOTBALL ANALYZER BOT
+⚽ FOOTBALL AI ANALYZER
 
 Ketik nama team:
 
@@ -69,23 +79,24 @@ Contoh:
 - manchester united
 
 BOT AKAN:
-✅ cari team otomatis
+✅ search team otomatis
 ✅ scrap statistik live
 ✅ analisa performa
-✅ over under trend
+✅ AI betting analysis
+✅ over/under trend
 ✅ BTTS trend
 ✅ confidence prediction
 """
 
 # =========================================================
-# SEARCH TEAM FROM FLASHSCORE
+# SEARCH TEAM
 # =========================================================
 
 def search_team(team_name):
 
     try:
 
-        url = (
+        search_url = (
             "https://s.livesport.services/api/v2/search/"
             f"?q={team_name}"
             "&lang-id=1"
@@ -94,7 +105,7 @@ def search_team(team_name):
         )
 
         r = scraper.get(
-            url,
+            search_url,
             headers=HEADERS,
             timeout=20
         )
@@ -107,9 +118,6 @@ def search_team(team_name):
         )
 
         if not results:
-
-            print("NO SEARCH RESULT")
-
             return None
 
         item = results[0]
@@ -125,33 +133,23 @@ def search_team(team_name):
         )
 
         if not slug:
-
-            print("NO SLUG")
-
             return None
 
-        final_url = (
+        team_url = (
             "https://www.flashscore.com/team/"
             f"{slug}/"
-        )
-
-        print(
-            f"[FOUND] {name}"
         )
 
         return {
 
             "name": name,
 
-            "url": final_url
+            "url": team_url
         }
 
     except Exception as e:
 
-        print(
-            "SEARCH ERROR:",
-            e
-        )
+        print("SEARCH ERROR:", e)
 
         return None
 
@@ -173,10 +171,7 @@ def scrap_team_page(url):
 
     except Exception as e:
 
-        print(
-            "SCRAP ERROR:",
-            e
-        )
+        print("SCRAP ERROR:", e)
 
         return None
 
@@ -190,34 +185,23 @@ def extract_matches(html):
 
         soup = BeautifulSoup(
             html,
-            "lxml"
+            "html.parser"
         )
 
-        scripts = soup.find_all("script")
+        text = soup.get_text(
+            " ",
+            strip=True
+        )
 
-        all_text = ""
-
-        for s in scripts:
-
-            try:
-
-                all_text += s.text
-
-            except:
-                pass
-
-        # cari score pattern
         pattern = (
-            r'"home":"([^"]+)".+?'
-            r'"away":"([^"]+)".+?'
-            r'"homeScore":(\d+).+?'
-            r'"awayScore":(\d+)'
+            r'([A-Za-z\s\.\-]+)\s'
+            r'(\d)-(\d)\s'
+            r'([A-Za-z\s\.\-]+)'
         )
 
         raw = re.findall(
             pattern,
-            all_text,
-            re.DOTALL
+            text
         )
 
         matches = []
@@ -228,59 +212,23 @@ def extract_matches(html):
 
                 matches.append({
 
-                    "home": m[0],
+                    "home": m[0].strip(),
 
-                    "away": m[1],
+                    "away": m[3].strip(),
 
-                    "hs": int(m[2]),
+                    "hs": int(m[1]),
 
-                    "aw": int(m[3])
+                    "aw": int(m[2])
                 })
 
             except:
                 continue
 
-        # fallback regex biasa
-        if not matches:
-
-            text = soup.get_text(
-                " ",
-                strip=True
-            )
-
-            fallback = re.findall(
-
-                r'([A-Za-z\s\.\-]+)\s(\d)-(\d)\s([A-Za-z\s\.\-]+)',
-
-                text
-            )
-
-            for m in fallback[:10]:
-
-                try:
-
-                    matches.append({
-
-                        "home": m[0].strip(),
-
-                        "away": m[3].strip(),
-
-                        "hs": int(m[1]),
-
-                        "aw": int(m[2])
-                    })
-
-                except:
-                    continue
-
         return matches
 
     except Exception as e:
 
-        print(
-            "EXTRACT ERROR:",
-            e
-        )
+        print("EXTRACT ERROR:", e)
 
         return []
 
@@ -296,23 +244,18 @@ def calculate_stats(matches, team_name):
     team_name = team_name.lower()
 
     wins = 0
-
     draws = 0
-
     losses = 0
 
     gf = []
-
     ga = []
 
     over25 = 0
-
     btts = 0
 
     for m in matches:
 
         home = m["home"].lower()
-
         away = m["away"].lower()
 
         is_home = (
@@ -332,7 +275,6 @@ def calculate_stats(matches, team_name):
         )
 
         gf.append(scored)
-
         ga.append(conceded)
 
         # result
@@ -397,74 +339,103 @@ def calculate_stats(matches, team_name):
     }
 
 # =========================================================
-# PREDICTION ENGINE
+# AI ANALYSIS (GROQ)
 # =========================================================
 
-def generate_prediction(stats):
+def ask_groq(team, stats):
 
-    score = 0
+    try:
 
-    if stats["win_rate"] >= 60:
-        score += 2
-
-    if stats["avg_goals_for"] >= 1.5:
-        score += 1
-
-    if stats["over25_rate"] >= 60:
-        score += 1
-
-    if stats["btts_rate"] >= 60:
-        score += 1
-
-    if score >= 4:
-
-        trend = (
-            "Strong attacking trend"
+        url = (
+            "https://api.groq.com/openai/v1/chat/completions"
         )
 
-        pick = (
-            "Over 2.5 Goals"
+        headers = {
+
+            "Authorization":
+                f"Bearer {GROQ_API_KEY}",
+
+            "Content-Type":
+                "application/json"
+        }
+
+        prompt = f"""
+You are a professional football betting analyst.
+
+TEAM:
+{team}
+
+STATISTICS:
+
+Win Rate:
+{stats['win_rate']}%
+
+Average Goals Scored:
+{stats['avg_goals_for']}
+
+Average Goals Conceded:
+{stats['avg_goals_against']}
+
+Over 2.5 Rate:
+{stats['over25_rate']}%
+
+BTTS Rate:
+{stats['btts_rate']}%
+
+TASK:
+Create professional betting analysis.
+
+OUTPUT:
+- Team Form
+- Goal Trend
+- Risk Analysis
+- Betting Insight
+- Recommended Pick
+- Confidence 1-100
+
+Professional tone only.
+"""
+
+        payload = {
+
+            "model":
+                "llama-3.3-70b-versatile",
+
+            "messages": [
+
+                {
+                    "role": "user",
+                    "content": prompt
+                }
+            ],
+
+            "temperature": 0.3,
+
+            "max_tokens": 500
+        }
+
+        r = requests.post(
+            url,
+            json=payload,
+            headers=headers,
+            timeout=60
         )
 
-    elif score >= 2:
+        data = r.json()
 
-        trend = (
-            "Moderate positive form"
-        )
+        return data["choices"][0]["message"]["content"]
 
-        pick = (
-            "Double Chance"
-        )
+    except Exception as e:
 
-    else:
+        print("GROQ ERROR:", e)
 
-        trend = (
-            "Unstable trend"
-        )
-
-        pick = (
-            "Avoid high-risk bets"
-        )
-
-    confidence = min(
-        85,
-        50 + score * 7
-    )
-
-    return {
-
-        "trend": trend,
-
-        "pick": pick,
-
-        "confidence": confidence
-    }
+        return "AI analysis unavailable."
 
 # =========================================================
 # FORMAT RESULT
 # =========================================================
 
-def format_result(team, stats, pred):
+def format_result(team, stats, ai):
 
     return f"""
 🏆 TEAM ANALYSIS
@@ -503,24 +474,10 @@ Over 2.5:
 BTTS:
 {stats['btts_rate']}%
 
-📈 ANALYSIS
+🤖 AI ANALYSIS
 ━━━━━━━━━━━━━━━
 
-Trend:
-{pred['trend']}
-
-Suggested Pick:
-{pred['pick']}
-
-Confidence:
-{pred['confidence']}/100
-
-⚠️ NOTE
-━━━━━━━━━━━━━━━
-
-Statistical model only.
-Football remains unpredictable.
-Avoid assuming certainty.
+{ai}
 """
 
 # =========================================================
@@ -556,10 +513,7 @@ async def analyze(message: Message):
             "🔍 Searching team..."
         )
 
-        # =================================================
         # SEARCH TEAM
-        # =================================================
-
         team = search_team(query)
 
         if not team:
@@ -570,10 +524,7 @@ async def analyze(message: Message):
 
             return
 
-        # =================================================
-        # SCRAP TEAM PAGE
-        # =================================================
-
+        # SCRAP
         await msg.edit_text(
             "⚡ Scraping statistics..."
         )
@@ -590,13 +541,8 @@ async def analyze(message: Message):
 
             return
 
-        # =================================================
-        # EXTRACT MATCHES
-        # =================================================
-
-        matches = extract_matches(
-            html
-        )
+        # EXTRACT
+        matches = extract_matches(html)
 
         if not matches:
 
@@ -606,10 +552,7 @@ async def analyze(message: Message):
 
             return
 
-        # =================================================
         # STATS
-        # =================================================
-
         stats = calculate_stats(
             matches,
             team["name"]
@@ -623,22 +566,21 @@ async def analyze(message: Message):
 
             return
 
-        # =================================================
-        # PREDICTION
-        # =================================================
+        # AI
+        await msg.edit_text(
+            "🤖 AI analyzing..."
+        )
 
-        pred = generate_prediction(
+        ai_analysis = ask_groq(
+            team["name"],
             stats
         )
 
-        # =================================================
-        # FINAL
-        # =================================================
-
+        # RESULT
         result = format_result(
             team["name"],
             stats,
-            pred
+            ai_analysis
         )
 
         await msg.edit_text(
@@ -647,10 +589,7 @@ async def analyze(message: Message):
 
     except Exception as e:
 
-        print(
-            "HANDLER ERROR:",
-            e
-        )
+        print("HANDLER ERROR:", e)
 
         await message.answer(
             "❌ Internal error"
@@ -663,7 +602,7 @@ async def analyze(message: Message):
 async def main():
 
     print(
-        "ULTRA FOOTBALL BOT RUNNING"
+        "FOOTBALL AI BOT RUNNING"
     )
 
     await dp.start_polling(bot)
