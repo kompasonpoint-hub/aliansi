@@ -1,18 +1,17 @@
 # =========================================================
 # MAIN.PY
-# ULTRA FOOTBALL AI ANALYZER BOT
-# FIXED FULL VERSION
+# AUTO FIX VERSION
+# NO BS4 REQUIRED
+# NO LXML REQUIRED
+# RAILWAY SAFE
 # =========================================================
 
 # =========================================================
-# INSTALL DI RAILWAY / VPS
+# INSTALL (requirements.txt)
 # =========================================================
-#
-# requirements.txt
 #
 # aiogram
 # requests
-# beautifulsoup4
 # cloudscraper
 #
 # =========================================================
@@ -22,13 +21,11 @@
 # =========================================================
 
 import asyncio
-import statistics
 import re
+import statistics
 import time
 import requests
 import cloudscraper
-
-from bs4 import BeautifulSoup
 
 from aiogram import Bot, Dispatcher
 from aiogram.types import Message
@@ -46,11 +43,15 @@ GROQ_API_KEY = "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"
 # =========================================================
 
 HEADERS = {
+
     "User-Agent":
     (
         "Mozilla/5.0 "
         "(Windows NT 10.0; Win64; x64)"
-    )
+    ),
+
+    "Accept":
+        "*/*"
 }
 
 # =========================================================
@@ -78,12 +79,11 @@ Contoh:
 - arsenal
 - manchester united
 
-BOT AKAN:
-✅ search team otomatis
-✅ scrap statistik live
-✅ analisa performa
+FITUR:
+✅ auto search team
+✅ live statistics
 ✅ AI betting analysis
-✅ over/under trend
+✅ over under trend
 ✅ BTTS trend
 ✅ confidence prediction
 """
@@ -96,7 +96,7 @@ def search_team(team_name):
 
     try:
 
-        search_url = (
+        url = (
             "https://s.livesport.services/api/v2/search/"
             f"?q={team_name}"
             "&lang-id=1"
@@ -105,7 +105,7 @@ def search_team(team_name):
         )
 
         r = scraper.get(
-            search_url,
+            url,
             headers=HEADERS,
             timeout=20
         )
@@ -118,6 +118,9 @@ def search_team(team_name):
         )
 
         if not results:
+
+            print("NO RESULTS")
+
             return None
 
         item = results[0]
@@ -133,11 +136,18 @@ def search_team(team_name):
         )
 
         if not slug:
+
+            print("NO SLUG")
+
             return None
 
         team_url = (
             "https://www.flashscore.com/team/"
             f"{slug}/"
+        )
+
+        print(
+            f"FOUND TEAM: {name}"
         )
 
         return {
@@ -149,12 +159,15 @@ def search_team(team_name):
 
     except Exception as e:
 
-        print("SEARCH ERROR:", e)
+        print(
+            "SEARCH ERROR:",
+            e
+        )
 
         return None
 
 # =========================================================
-# SCRAP TEAM PAGE
+# SCRAP PAGE
 # =========================================================
 
 def scrap_team_page(url):
@@ -171,7 +184,10 @@ def scrap_team_page(url):
 
     except Exception as e:
 
-        print("SCRAP ERROR:", e)
+        print(
+            "SCRAP ERROR:",
+            e
+        )
 
         return None
 
@@ -183,52 +199,78 @@ def extract_matches(html):
 
     try:
 
-        soup = BeautifulSoup(
-            html,
-            "html.parser"
-        )
-
-        text = soup.get_text(
-            " ",
-            strip=True
-        )
-
-        pattern = (
-            r'([A-Za-z\s\.\-]+)\s'
-            r'(\d)-(\d)\s'
-            r'([A-Za-z\s\.\-]+)'
-        )
-
-        raw = re.findall(
-            pattern,
-            text
-        )
-
         matches = []
 
-        for m in raw[:10]:
+        # =================================================
+        # REGEX SCORE
+        # =================================================
 
-            try:
+        patterns = [
 
-                matches.append({
+            # standard
+            r'([A-Za-z\s\.\-]+)\s(\d)-(\d)\s([A-Za-z\s\.\-]+)',
 
-                    "home": m[0].strip(),
+            # json style
+            r'"home":"([^"]+)".+?"away":"([^"]+)".+?"homeScore":(\d+).+?"awayScore":(\d+)',
 
-                    "away": m[3].strip(),
+            # alt
+            r'([A-Za-z\s]+)\s(\d+):(\d+)\s([A-Za-z\s]+)'
+        ]
 
-                    "hs": int(m[1]),
+        for pattern in patterns:
 
-                    "aw": int(m[2])
-                })
+            raw = re.findall(
+                pattern,
+                html,
+                re.DOTALL
+            )
 
-            except:
-                continue
+            for m in raw[:20]:
 
-        return matches
+                try:
+
+                    matches.append({
+
+                        "home": m[0].strip(),
+
+                        "away": m[3].strip(),
+
+                        "hs": int(m[1]),
+
+                        "aw": int(m[2])
+                    })
+
+                except:
+                    continue
+
+        # remove duplicates
+        unique = []
+
+        seen = set()
+
+        for m in matches:
+
+            key = (
+                m["home"],
+                m["away"],
+                m["hs"],
+                m["aw"]
+            )
+
+            if key not in seen:
+
+                seen.add(key)
+
+                unique.append(m)
+
+        return unique[:10]
 
     except Exception as e:
 
-        print("EXTRACT ERROR:", e)
+        print(
+            "EXTRACT ERROR:",
+            e
+        )
 
         return []
 
@@ -238,108 +280,126 @@ def extract_matches(html):
 
 def calculate_stats(matches, team_name):
 
-    if not matches:
+    try:
+
+        if not matches:
+            return None
+
+        team_name = team_name.lower()
+
+        wins = 0
+        draws = 0
+        losses = 0
+
+        gf = []
+        ga = []
+
+        over25 = 0
+        btts = 0
+
+        for m in matches:
+
+            home = m["home"].lower()
+
+            away = m["away"].lower()
+
+            is_home = (
+                team_name in home
+            )
+
+            scored = (
+                m["hs"]
+                if is_home
+                else m["aw"]
+            )
+
+            conceded = (
+                m["aw"]
+                if is_home
+                else m["hs"]
+            )
+
+            gf.append(scored)
+
+            ga.append(conceded)
+
+            # result
+            if scored > conceded:
+
+                wins += 1
+
+            elif scored == conceded:
+
+                draws += 1
+
+            else:
+
+                losses += 1
+
+            # over
+            if scored + conceded >= 3:
+
+                over25 += 1
+
+            # btts
+            if scored > 0 and conceded > 0:
+
+                btts += 1
+
+        played = len(matches)
+
+        return {
+
+            "played": played,
+
+            "wins": wins,
+
+            "draws": draws,
+
+            "losses": losses,
+
+            "win_rate":
+                round(
+                    (wins / played) * 100,
+                    1
+                ),
+
+            "avg_goals_for":
+                round(
+                    statistics.mean(gf),
+                    2
+                ),
+
+            "avg_goals_against":
+                round(
+                    statistics.mean(ga),
+                    2
+                ),
+
+            "over25_rate":
+                round(
+                    (over25 / played) * 100,
+                    1
+                ),
+
+            "btts_rate":
+                round(
+                    (btts / played) * 100,
+                    1
+                )
+        }
+
+    except Exception as e:
+
+        print(
+            "STATS ERROR:",
+            e
+        )
+
         return None
 
-    team_name = team_name.lower()
-
-    wins = 0
-    draws = 0
-    losses = 0
-
-    gf = []
-    ga = []
-
-    over25 = 0
-    btts = 0
-
-    for m in matches:
-
-        home = m["home"].lower()
-        away = m["away"].lower()
-
-        is_home = (
-            team_name in home
-        )
-
-        scored = (
-            m["hs"]
-            if is_home
-            else m["aw"]
-        )
-
-        conceded = (
-            m["aw"]
-            if is_home
-            else m["hs"]
-        )
-
-        gf.append(scored)
-        ga.append(conceded)
-
-        # result
-        if scored > conceded:
-            wins += 1
-
-        elif scored == conceded:
-            draws += 1
-
-        else:
-            losses += 1
-
-        # over
-        if scored + conceded >= 3:
-            over25 += 1
-
-        # BTTS
-        if scored > 0 and conceded > 0:
-            btts += 1
-
-    played = len(matches)
-
-    return {
-
-        "played": played,
-
-        "wins": wins,
-
-        "draws": draws,
-
-        "losses": losses,
-
-        "win_rate":
-            round(
-                (wins / played) * 100,
-                1
-            ),
-
-        "avg_goals_for":
-            round(
-                statistics.mean(gf),
-                2
-            ),
-
-        "avg_goals_against":
-            round(
-                statistics.mean(ga),
-                2
-            ),
-
-        "over25_rate":
-            round(
-                (over25 / played) * 100,
-                1
-            ),
-
-        "btts_rate":
-            round(
-                (btts / played) * 100,
-                1
-            )
-    }
-
 # =========================================================
-# AI ANALYSIS (GROQ)
+# GROQ AI
 # =========================================================
 
 def ask_groq(team, stats):
@@ -370,30 +430,30 @@ STATISTICS:
 Win Rate:
 {stats['win_rate']}%
 
-Average Goals Scored:
+Goals Scored:
 {stats['avg_goals_for']}
 
-Average Goals Conceded:
+Goals Conceded:
 {stats['avg_goals_against']}
 
-Over 2.5 Rate:
+Over 2.5:
 {stats['over25_rate']}%
 
-BTTS Rate:
+BTTS:
 {stats['btts_rate']}%
 
 TASK:
-Create professional betting analysis.
+Create concise professional betting analysis.
 
 OUTPUT:
-- Team Form
+- Form Analysis
 - Goal Trend
-- Risk Analysis
 - Betting Insight
 - Recommended Pick
 - Confidence 1-100
 
 Professional tone only.
+No hype.
 """
 
         payload = {
@@ -405,13 +465,14 @@ Professional tone only.
 
                 {
                     "role": "user",
+
                     "content": prompt
                 }
             ],
 
             "temperature": 0.3,
 
-            "max_tokens": 500
+            "max_tokens": 400
         }
 
         r = requests.post(
@@ -427,12 +488,17 @@ Professional tone only.
 
     except Exception as e:
 
-        print("GROQ ERROR:", e)
+        print(
+            "GROQ ERROR:",
+            e
+        )
 
-        return "AI analysis unavailable."
+        return (
+            "AI analysis unavailable."
+        )
 
 # =========================================================
-# FORMAT RESULT
+# FORMAT
 # =========================================================
 
 def format_result(team, stats, ai):
@@ -513,7 +579,10 @@ async def analyze(message: Message):
             "🔍 Searching team..."
         )
 
+        # =================================================
         # SEARCH TEAM
+        # =================================================
+
         team = search_team(query)
 
         if not team:
@@ -524,7 +593,10 @@ async def analyze(message: Message):
 
             return
 
+        # =================================================
         # SCRAP
+        # =================================================
+
         await msg.edit_text(
             "⚡ Scraping statistics..."
         )
@@ -541,8 +613,13 @@ async def analyze(message: Message):
 
             return
 
-        # EXTRACT
-        matches = extract_matches(html)
+        # =================================================
+        # MATCHES
+        # =================================================
+
+        matches = extract_matches(
+            html
+        )
 
         if not matches:
 
@@ -552,7 +629,10 @@ async def analyze(message: Message):
 
             return
 
+        # =================================================
         # STATS
+        # =================================================
+
         stats = calculate_stats(
             matches,
             team["name"]
@@ -566,21 +646,27 @@ async def analyze(message: Message):
 
             return
 
+        # =================================================
         # AI
+        # =================================================
+
         await msg.edit_text(
             "🤖 AI analyzing..."
         )
 
-        ai_analysis = ask_groq(
+        ai = ask_groq(
             team["name"],
             stats
         )
 
+        # =================================================
         # RESULT
+        # =================================================
+
         result = format_result(
             team["name"],
             stats,
-            ai_analysis
+            ai
         )
 
         await msg.edit_text(
@@ -589,7 +675,10 @@ async def analyze(message: Message):
 
     except Exception as e:
 
-        print("HANDLER ERROR:", e)
+        print(
+            "HANDLER ERROR:",
+            e
+        )
 
         await message.answer(
             "❌ Internal error"
