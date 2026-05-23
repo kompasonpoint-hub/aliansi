@@ -829,11 +829,13 @@ async def analyze(message: Message):
 
 async def main():
 
-    print(
-        "ULTRA FOOTBALL BOT RUNNING"
-    )
+    print("FOOTBALL AI BOT RUNNING")
 
     await dp.start_polling(bot)
+
+if __name__ == "__main__":
+
+    asyncio.run(main())
 
 # =========================================================
 # RUN
