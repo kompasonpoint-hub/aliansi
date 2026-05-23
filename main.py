@@ -46,7 +46,8 @@ HEADERS = {
 # BOT
 # =========================================================
 
-bot = Bot(8962278856:AAEVOkunN5NY3qlgl_SFwXpBgkWPGQGBqro)
+BOT_TOKEN = "8962278856:AAEVOkunN5NY3qlgl_SFwXpBgkWPGQGBqro"
+GROQ_API_KEY = "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"
 
 dp = Dispatcher()
 
