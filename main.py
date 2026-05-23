@@ -1,25 +1,10 @@
 # =========================================================
 # MAIN.PY
-# ULTRA FOOTBALL BETTING ANALYZER
-# PROFESSIONAL VERSION
-# =========================================================
-
-# =========================================================
-# REQUIREMENTS.TXT
-# =========================================================
-#
-# aiogram
-# requests
-#
-# =========================================================
-
-# =========================================================
-# IMPORT
+# FIXED STABLE FOOTBALL AI BOT
 # =========================================================
 
 import asyncio
 import statistics
-import time
 import requests
 
 from aiogram import Bot, Dispatcher
@@ -31,7 +16,7 @@ from aiogram.filters import CommandStart
 # =========================================================
 
 BOT_TOKEN = "8962278856:AAEVOkunN5NY3qlgl_SFwXpBgkWPGQGBqro"
-GROQ_API_KEY = "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"I"
+GROQ_API_KEY = "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"
 
 SPORTSDB_API = "https://www.thesportsdb.com/api/v1/json/3"
 
@@ -40,6 +25,7 @@ SPORTSDB_API = "https://www.thesportsdb.com/api/v1/json/3"
 # =========================================================
 
 bot = Bot(token=BOT_TOKEN)
+
 dp = Dispatcher()
 
 # =========================================================
@@ -47,7 +33,7 @@ dp = Dispatcher()
 # =========================================================
 
 MENU = """
-⚽ ULTRA FOOTBALL BETTING ANALYZER
+⚽ FOOTBALL AI ANALYZER
 
 Ketik nama team.
 
@@ -58,16 +44,14 @@ Contoh:
 - manchester united
 
 FITUR:
-✅ last 10 matches
-✅ next match
-✅ form analysis
-✅ winrate
-✅ avg goals
-✅ clean sheet
+✅ Last 10 matches
+✅ Next match
+✅ Team form
+✅ Win rate
+✅ Goal trend
 ✅ BTTS
-✅ over under
+✅ Over/Under
 ✅ AI betting analysis
-✅ professional betting insight
 """
 
 # =========================================================
@@ -142,13 +126,17 @@ def search_team(team_name):
 
         return {
 
-            "id": best.get("idTeam"),
+            "id":
+                best.get("idTeam"),
 
-            "name": best.get("strTeam"),
+            "name":
+                best.get("strTeam"),
 
-            "league": best.get("strLeague"),
+            "league":
+                best.get("strLeague"),
 
-            "country": best.get("strCountry")
+            "country":
+                best.get("strCountry")
         }
 
     except Exception as e:
@@ -289,7 +277,7 @@ def get_next_match(team_id):
         return None
 
 # =========================================================
-# CALCULATE ADVANCED STATS
+# CALCULATE STATS
 # =========================================================
 
 def calculate_stats(matches, team_name):
@@ -343,6 +331,7 @@ def calculate_stats(matches, team_name):
             )
 
             gf.append(scored)
+
             ga.append(conceded)
 
             # RESULT
@@ -384,21 +373,27 @@ def calculate_stats(matches, team_name):
 
         return {
 
-            "played": played,
+            "played":
+                played,
 
-            "wins": wins,
+            "wins":
+                wins,
 
-            "draws": draws,
+            "draws":
+                draws,
 
-            "losses": losses,
+            "losses":
+                losses,
 
             "form":
                 " ".join(form),
 
             "win_rate":
                 round(
-                    (wins / played)
-                    * 100,
+                    (
+                        wins /
+                        played
+                    ) * 100,
                     1
                 ),
 
@@ -416,39 +411,46 @@ def calculate_stats(matches, team_name):
 
             "over15":
                 round(
-                    (over15 / played)
-                    * 100,
+                    (
+                        over15 /
+                        played
+                    ) * 100,
                     1
                 ),
 
             "over25":
                 round(
-                    (over25 / played)
-                    * 100,
+                    (
+                        over25 /
+                        played
+                    ) * 100,
                     1
                 ),
 
             "over35":
                 round(
-                    (over35 / played)
-                    * 100,
+                    (
+                        over35 /
+                        played
+                    ) * 100,
                     1
                 ),
 
             "btts":
                 round(
-                    (btts / played)
-                    * 100,
+                    (
+                        btts /
+                        played
+                    ) * 100,
                     1
                 ),
 
             "clean_sheet":
                 round(
                     (
-                        clean_sheet
-                        / played
-                    )
-                    * 100,
+                        clean_sheet /
+                        played
+                    ) * 100,
                     1
                 )
         }
@@ -460,7 +462,7 @@ def calculate_stats(matches, team_name):
         return None
 
 # =========================================================
-# FORMAT MATCH LIST
+# FORMAT MATCHES
 # =========================================================
 
 def format_matches(matches):
@@ -478,7 +480,7 @@ def format_matches(matches):
     return txt
 
 # =========================================================
-# PROFESSIONAL AI ANALYSIS
+# GROQ AI
 # =========================================================
 
 def ask_groq(team, stats, next_match, matches):
@@ -499,26 +501,23 @@ def ask_groq(team, stats, next_match, matches):
         }
 
         prompt = f"""
-You are an elite football betting analyst.
+Lu adalah analis betting profesional.
 
-IMPORTANT:
-- professional betting analysis
-- avoid hype
-- avoid random prediction
-- focus on data
-- realistic betting insight only
-- concise but sharp
-- use Indonesian language
-- professional bettor tone
+WAJIB:
+- fokus statistik
+- jangan ngarang
+- jangan terlalu hype
+- gunakan bahasa Indonesia santai
+- tetap profesional
 
 TEAM:
 {team['name']}
 
-COUNTRY:
-{team['country']}
-
 LEAGUE:
 {team['league']}
+
+COUNTRY:
+{team['country']}
 
 NEXT MATCH:
 {next_match}
@@ -526,7 +525,7 @@ NEXT MATCH:
 LAST MATCHES:
 {format_matches(matches)}
 
-STATISTICS:
+STATISTIK:
 
 Form:
 {stats['form']}
@@ -534,10 +533,10 @@ Form:
 Win Rate:
 {stats['win_rate']}%
 
-Average Goals Scored:
+Rata-rata gol:
 {stats['avg_goals_for']}
 
-Average Goals Conceded:
+Rata-rata kebobolan:
 {stats['avg_goals_against']}
 
 Over 1.5:
@@ -555,25 +554,19 @@ BTTS:
 Clean Sheet:
 {stats['clean_sheet']}%
 
-TASK:
-Create professional betting analysis.
+WAJIB OUTPUT:
 
-MUST INCLUDE:
+1. Analisa Form
+2. Analisa Gol
+3. Potensi Jalannya Match
+4. Value Bet
+5. Prediksi 1X2
+6. Over/Under
+7. BTTS
+8. Asian Handicap
+9. Confidence Score
 
-1. Match Reading
-2. Team Form
-3. Goal Trend
-4. Risk Analysis
-5. Value Bet
-6. 1X2
-7. Over/Under
-8. BTTS
-9. Asian Handicap
-10. Confidence Score
-
-NO EMOJI.
-NO OVERHYPE.
-NO CLICKBAIT.
+Format rapi.
 """
 
         payload = {
@@ -744,7 +737,7 @@ async def analyze(message: Message):
             "🔍 searching team..."
         )
 
-        # SEARCH
+        # SEARCH TEAM
         team = search_team(query)
 
         if not team:
@@ -755,7 +748,7 @@ async def analyze(message: Message):
 
             return
 
-        # FETCH
+        # FETCH DATA
         await msg.edit_text(
             "⚡ fetching statistics..."
         )
@@ -790,7 +783,7 @@ async def analyze(message: Message):
 
             return
 
-        # AI
+        # AI ANALYSIS
         await msg.edit_text(
             "🤖 analyzing betting data..."
         )
@@ -829,13 +822,11 @@ async def analyze(message: Message):
 
 async def main():
 
-    print("FOOTBALL AI BOT RUNNING")
+    print(
+        "FOOTBALL AI BOT RUNNING"
+    )
 
     await dp.start_polling(bot)
-
-if __name__ == "__main__":
-
-    asyncio.run(main())
 
 # =========================================================
 # RUN
@@ -843,17 +834,4 @@ if __name__ == "__main__":
 
 if __name__ == "__main__":
 
-    while True:
-
-        try:
-
-            asyncio.run(main())
-
-        except Exception as e:
-
-            print(
-                "MAIN ERROR:",
-                e
-            )
-
-            time.sleep(5)
+    asyncio.run(main())
