@@ -1,7 +1,7 @@
 # =========================================================
 # MAIN.PY
-# ULTRA FOOTBALL AI BOT
-# TRANSFERMARKT VERSION (STABLE)
+# FOOTBALL AI ANALYZER BOT
+# STABLE API VERSION (NO SCRAPING)
 # =========================================================
 
 # =========================================================
@@ -10,7 +10,6 @@
 #
 # aiogram
 # requests
-# cloudscraper
 #
 # =========================================================
 
@@ -19,11 +18,9 @@
 # =========================================================
 
 import asyncio
-import re
 import statistics
 import time
 import requests
-import cloudscraper
 
 from aiogram import Bot, Dispatcher
 from aiogram.types import Message
@@ -36,31 +33,15 @@ from aiogram.filters import CommandStart
 BOT_TOKEN = "8962278856:AAEVOkunN5NY3qlgl_SFwXpBgkWPGQGBqro"
 GROQ_API_KEY = "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"
 
-# =========================================================
-# HEADERS
-# =========================================================
-
-HEADERS = {
-
-    "User-Agent":
-    (
-        "Mozilla/5.0 "
-        "(Windows NT 10.0; Win64; x64)"
-    ),
-
-    "Accept-Language":
-        "en-US,en;q=0.9"
-}
+# FREE PUBLIC API
+SPORTSDB_API = "https://www.thesportsdb.com/api/v1/json/3"
 
 # =========================================================
 # BOT
 # =========================================================
 
 bot = Bot(token=BOT_TOKEN)
-
 dp = Dispatcher()
-
-scraper = cloudscraper.create_scraper()
 
 # =========================================================
 # MENU
@@ -78,16 +59,18 @@ Contoh:
 - manchester united
 
 FITUR:
-✅ auto search team
-✅ live statistics
+✅ Auto search team
+✅ Last matches
+✅ Next match
+✅ Goal statistics
 ✅ AI betting analysis
-✅ over under trend
+✅ Over/Under trend
 ✅ BTTS trend
-✅ confidence prediction
+✅ Professional prediction
 """
 
 # =========================================================
-# SEARCH TEAM (TRANSFERMARKT)
+# SEARCH TEAM
 # =========================================================
 
 def search_team(team_name):
@@ -95,48 +78,31 @@ def search_team(team_name):
     try:
 
         url = (
-            "https://www.transfermarkt.com/"
-            "schnellsuche/ergebnis/schnellsuche"
-            f"?query={team_name}"
+            f"{SPORTSDB_API}/searchteams.php"
+            f"?t={team_name}"
         )
 
-        html = requests.get(
-            url,
-            headers=HEADERS,
-            timeout=20
-        ).text
+        r = requests.get(url, timeout=20)
 
-        matches = re.findall(
-            r'href="([^"]+)"',
-            html
-        )
+        data = r.json()
 
-        for m in matches:
+        teams = data.get("teams")
 
-            if "/startseite/verein/" in m:
+        if not teams:
+            return None
 
-                full_url = (
-                    "https://www.transfermarkt.com"
-                    + m
-                )
+        team = teams[0]
 
-                slug = (
-                    m
-                    .split("/")[1]
-                    .replace("-", " ")
-                    .title()
-                )
+        return {
 
-                print("FOUND TEAM:", slug)
+            "id": team.get("idTeam"),
 
-                return {
+            "name": team.get("strTeam"),
 
-                    "name": slug,
+            "league": team.get("strLeague"),
 
-                    "url": full_url
-                }
-
-        return None
+            "country": team.get("strCountry")
+        }
 
     except Exception as e:
 
@@ -145,98 +111,98 @@ def search_team(team_name):
         return None
 
 # =========================================================
-# SCRAP TEAM PAGE
+# GET LAST MATCHES
 # =========================================================
 
-def scrap_team_page(url):
+def get_last_matches(team_id):
 
     try:
 
-        html = scraper.get(
-            url,
-            headers=HEADERS,
-            timeout=20
-        ).text
+        url = (
+            f"{SPORTSDB_API}/eventslast.php"
+            f"?id={team_id}"
+        )
 
-        return html
+        r = requests.get(url, timeout=20)
 
-    except Exception as e:
+        data = r.json()
 
-        print("SCRAP ERROR:", e)
+        events = data.get("results")
 
-        return None
-
-# =========================================================
-# EXTRACT MATCHES
-# =========================================================
-
-def extract_matches(html):
-
-    try:
+        if not events:
+            return []
 
         matches = []
 
-        patterns = [
+        for e in events[:5]:
 
-            # normal score
-            r'([A-Za-z\s\-\.\']+)\s(\d)-(\d)\s([A-Za-z\s\-\.\']+)',
+            try:
 
-            # alt score
-            r'([A-Za-z\s\-\.\']+)\s(\d+):(\d+)\s([A-Za-z\s\-\.\']+)'
-        ]
+                hs = int(e["intHomeScore"])
+                aw = int(e["intAwayScore"])
 
-        for pattern in patterns:
+                matches.append({
 
-            raw = re.findall(
-                pattern,
-                html
-            )
+                    "home": e["strHomeTeam"],
 
-            for m in raw[:20]:
+                    "away": e["strAwayTeam"],
 
-                try:
+                    "hs": hs,
 
-                    matches.append({
+                    "aw": aw
+                })
 
-                        "home": m[0].strip(),
+            except:
+                continue
 
-                        "away": m[3].strip(),
-
-                        "hs": int(m[1]),
-
-                        "aw": int(m[2])
-                    })
-
-                except:
-                    continue
-
-        # remove duplicates
-        unique = []
-
-        seen = set()
-
-        for m in matches:
-
-            key = (
-                m["home"],
-                m["away"],
-                m["hs"],
-                m["aw"]
-            )
-
-            if key not in seen:
-
-                seen.add(key)
-
-                unique.append(m)
-
-        return unique[:10]
+        return matches
 
     except Exception as e:
 
-        print("EXTRACT ERROR:", e)
+        print("LAST MATCH ERROR:", e)
 
         return []
+
+# =========================================================
+# NEXT MATCH
+# =========================================================
+
+def get_next_match(team_id):
+
+    try:
+
+        url = (
+            f"{SPORTSDB_API}/eventsnext.php"
+            f"?id={team_id}"
+        )
+
+        r = requests.get(url, timeout=20)
+
+        data = r.json()
+
+        events = data.get("events")
+
+        if not events:
+            return None
+
+        e = events[0]
+
+        return {
+
+            "home": e.get("strHomeTeam"),
+
+            "away": e.get("strAwayTeam"),
+
+            "date": e.get("dateEvent"),
+
+            "league": e.get("strLeague")
+        }
+
+    except Exception as e:
+
+        print("NEXT MATCH ERROR:", e)
+
+        return None
 
 # =========================================================
 # CALCULATE STATS
@@ -245,9 +211,6 @@ def extract_matches(html):
 def calculate_stats(matches, team_name):
 
     try:
-
-        if not matches:
-            return None
 
         team_name = team_name.lower()
 
@@ -263,11 +226,9 @@ def calculate_stats(matches, team_name):
 
         for m in matches:
 
-            home = m["home"].lower()
-            away = m["away"].lower()
-
             is_home = (
-                team_name in home
+                team_name in
+                m["home"].lower()
             )
 
             scored = (
@@ -285,7 +246,7 @@ def calculate_stats(matches, team_name):
             gf.append(scored)
             ga.append(conceded)
 
-            # result
+            # RESULT
             if scored > conceded:
 
                 wins += 1
@@ -298,12 +259,12 @@ def calculate_stats(matches, team_name):
 
                 losses += 1
 
-            # over
+            # OVER 2.5
             if scored + conceded >= 3:
 
                 over25 += 1
 
-            # btts
+            # BTTS
             if scored > 0 and conceded > 0:
 
                 btts += 1
@@ -361,7 +322,7 @@ def calculate_stats(matches, team_name):
 # GROQ AI
 # =========================================================
 
-def ask_groq(team, stats):
+def ask_groq(team, stats, next_match):
 
     try:
 
@@ -384,31 +345,35 @@ You are a professional football betting analyst.
 TEAM:
 {team}
 
+NEXT MATCH:
+{next_match}
+
 STATISTICS:
 
 Win Rate:
 {stats['win_rate']}%
 
-Average Goals Scored:
+Goals Scored:
 {stats['avg_goals_for']}
 
-Average Goals Conceded:
+Goals Conceded:
 {stats['avg_goals_against']}
 
-Over 2.5 Rate:
+Over 2.5:
 {stats['over25_rate']}%
 
-BTTS Rate:
+BTTS:
 {stats['btts_rate']}%
 
 TASK:
-Create concise professional betting analysis.
+Create professional betting analysis.
 
 OUTPUT:
-- Team Form
+- Form Analysis
 - Goal Trend
 - Betting Insight
 - Recommended Pick
+- Risk Level
 - Confidence 1-100
 
 Professional tone only.
@@ -430,7 +395,7 @@ No hype.
 
             "temperature": 0.3,
 
-            "max_tokens": 400
+            "max_tokens": 500
         }
 
         r = requests.post(
@@ -454,14 +419,36 @@ No hype.
 # FORMAT RESULT
 # =========================================================
 
-def format_result(team, stats, ai):
+def format_result(team, stats, next_match, ai):
+
+    next_info = "No upcoming match"
+
+    if next_match:
+
+        next_info = (
+            f"{next_match['home']} vs "
+            f"{next_match['away']}\n"
+            f"{next_match['date']}\n"
+            f"{next_match['league']}"
+        )
 
     return f"""
 🏆 TEAM ANALYSIS
 ━━━━━━━━━━━━━━━
 
 ⚽ Team:
-{team}
+{team['name']}
+
+🌍 Country:
+{team['country']}
+
+🏆 League:
+{team['league']}
+
+📅 NEXT MATCH
+━━━━━━━━━━━━━━━
+
+{next_info}
 
 📊 STATISTICS
 ━━━━━━━━━━━━━━━
@@ -532,10 +519,7 @@ async def analyze(message: Message):
             "🔍 Searching team..."
         )
 
-        # =================================================
         # SEARCH TEAM
-        # =================================================
-
         team = search_team(query)
 
         if not team:
@@ -546,44 +530,29 @@ async def analyze(message: Message):
 
             return
 
-        # =================================================
-        # SCRAP PAGE
-        # =================================================
-
+        # LAST MATCHES
         await msg.edit_text(
-            "⚡ Scraping statistics..."
+            "⚡ Fetching statistics..."
         )
 
-        html = scrap_team_page(
-            team["url"]
+        matches = get_last_matches(
+            team["id"]
         )
-
-        if not html:
-
-            await msg.edit_text(
-                "❌ Failed scraping page"
-            )
-
-            return
-
-        # =================================================
-        # EXTRACT MATCHES
-        # =================================================
-
-        matches = extract_matches(html)
 
         if not matches:
 
             await msg.edit_text(
-                "❌ Match data not found"
+                "❌ Match data unavailable"
             )
 
             return
 
-        # =================================================
-        # CALCULATE STATS
-        # =================================================
+        # NEXT MATCH
+        next_match = get_next_match(
+            team["id"]
+        )
 
+        # STATS
         stats = calculate_stats(
             matches,
             team["name"]
@@ -592,31 +561,27 @@ async def analyze(message: Message):
         if not stats:
 
             await msg.edit_text(
-                "❌ Failed calculating stats"
+                "❌ Failed calculating statistics"
             )
 
             return
 
-        # =================================================
         # AI ANALYSIS
-        # =================================================
-
         await msg.edit_text(
             "🤖 AI analyzing..."
         )
 
         ai = ask_groq(
             team["name"],
-            stats
+            stats,
+            next_match
         )
 
-        # =================================================
         # RESULT
-        # =================================================
-
         result = format_result(
-            team["name"],
+            team,
             stats,
+            next_match,
             ai
         )
 
@@ -664,4 +629,3 @@ if __name__ == "__main__":
             )
 
             time.sleep(5)
-
