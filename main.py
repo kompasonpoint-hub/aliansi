@@ -1,13 +1,11 @@
 # =========================================================
 # MAIN.PY
-# AUTO FIX VERSION
-# NO BS4 REQUIRED
-# NO LXML REQUIRED
-# RAILWAY SAFE
+# ULTRA FOOTBALL AI BOT
+# TRANSFERMARKT VERSION (STABLE)
 # =========================================================
 
 # =========================================================
-# INSTALL (requirements.txt)
+# REQUIREMENTS.TXT
 # =========================================================
 #
 # aiogram
@@ -50,8 +48,8 @@ HEADERS = {
         "(Windows NT 10.0; Win64; x64)"
     ),
 
-    "Accept":
-        "*/*"
+    "Accept-Language":
+        "en-US,en;q=0.9"
 }
 
 # =========================================================
@@ -75,8 +73,8 @@ Ketik nama team:
 
 Contoh:
 - persib
-- real madrid
 - arsenal
+- real madrid
 - manchester united
 
 FITUR:
@@ -89,7 +87,7 @@ FITUR:
 """
 
 # =========================================================
-# SEARCH TEAM
+# SEARCH TEAM (TRANSFERMARKT)
 # =========================================================
 
 def search_team(team_name):
@@ -97,77 +95,57 @@ def search_team(team_name):
     try:
 
         url = (
-            "https://s.livesport.services/api/v2/search/"
-            f"?q={team_name}"
-            "&lang-id=1"
-            "&sport-ids=1"
-            "&type-ids=1"
+            "https://www.transfermarkt.com/"
+            "schnellsuche/ergebnis/schnellsuche"
+            f"?query={team_name}"
         )
 
-        r = scraper.get(
+        html = requests.get(
             url,
             headers=HEADERS,
             timeout=20
+        ).text
+
+        matches = re.findall(
+            r'href="([^"]+)"',
+            html
         )
 
-        data = r.json()
+        for m in matches:
 
-        results = data.get(
-            "results",
-            []
-        )
+            if "/startseite/verein/" in m:
 
-        if not results:
+                full_url = (
+                    "https://www.transfermarkt.com"
+                    + m
+                )
 
-            print("NO RESULTS")
+                slug = (
+                    m
+                    .split("/")[1]
+                    .replace("-", " ")
+                    .title()
+                )
 
-            return None
+                print("FOUND TEAM:", slug)
 
-        item = results[0]
+                return {
 
-        name = item.get(
-            "name",
-            "Unknown"
-        )
+                    "name": slug,
 
-        slug = item.get(
-            "url",
-            ""
-        )
+                    "url": full_url
+                }
 
-        if not slug:
-
-            print("NO SLUG")
-
-            return None
-
-        team_url = (
-            "https://www.flashscore.com/team/"
-            f"{slug}/"
-        )
-
-        print(
-            f"FOUND TEAM: {name}"
-        )
-
-        return {
-
-            "name": name,
-
-            "url": team_url
-        }
+        return None
 
     except Exception as e:
 
-        print(
-            "SEARCH ERROR:",
-            e
-        )
+        print("SEARCH ERROR:", e)
 
         return None
 
 # =========================================================
-# SCRAP PAGE
+# SCRAP TEAM PAGE
 # =========================================================
 
 def scrap_team_page(url):
@@ -184,10 +162,7 @@ def scrap_team_page(url):
 
     except Exception as e:
 
-        print(
-            "SCRAP ERROR:",
-            e
-        )
+        print("SCRAP ERROR:", e)
 
         return None
 
@@ -201,28 +176,20 @@ def extract_matches(html):
 
         matches = []
 
-        # =================================================
-        # REGEX SCORE
-        # =================================================
-
         patterns = [
 
-            # standard
-            r'([A-Za-z\s\.\-]+)\s(\d)-(\d)\s([A-Za-z\s\.\-]+)',
+            # normal score
+            r'([A-Za-z\s\-\.\']+)\s(\d)-(\d)\s([A-Za-z\s\-\.\']+)',
 
-            # json style
-            r'"home":"([^"]+)".+?"away":"([^"]+)".+?"homeScore":(\d+).+?"awayScore":(\d+)',
-
-            # alt
-            r'([A-Za-z\s]+)\s(\d+):(\d+)\s([A-Za-z\s]+)'
+            # alt score
+            r'([A-Za-z\s\-\.\']+)\s(\d+):(\d+)\s([A-Za-z\s\-\.\']+)'
         ]
 
         for pattern in patterns:
 
             raw = re.findall(
                 pattern,
-                html,
-                re.DOTALL
+                html
             )
 
             for m in raw[:20]:
@@ -267,10 +234,7 @@ def extract_matches(html):
 
     except Exception as e:
 
-        print(
-            "EXTRACT ERROR:",
-            e
-        )
+        print("EXTRACT ERROR:", e)
 
         return []
 
@@ -300,7 +264,6 @@ def calculate_stats(matches, team_name):
         for m in matches:
 
             home = m["home"].lower()
-
             away = m["away"].lower()
 
             is_home = (
@@ -320,7 +283,6 @@ def calculate_stats(matches, team_name):
             )
 
             gf.append(scored)
-
             ga.append(conceded)
 
             # result
@@ -391,10 +353,7 @@ def calculate_stats(matches, team_name):
 
     except Exception as e:
 
-        print(
-            "STATS ERROR:",
-            e
-        )
+        print("STATS ERROR:", e)
 
         return None
 
@@ -430,23 +389,23 @@ STATISTICS:
 Win Rate:
 {stats['win_rate']}%
 
-Goals Scored:
+Average Goals Scored:
 {stats['avg_goals_for']}
 
-Goals Conceded:
+Average Goals Conceded:
 {stats['avg_goals_against']}
 
-Over 2.5:
+Over 2.5 Rate:
 {stats['over25_rate']}%
 
-BTTS:
+BTTS Rate:
 {stats['btts_rate']}%
 
 TASK:
 Create concise professional betting analysis.
 
 OUTPUT:
-- Form Analysis
+- Team Form
 - Goal Trend
 - Betting Insight
 - Recommended Pick
@@ -465,7 +424,6 @@ No hype.
 
                 {
                     "role": "user",
-
                     "content": prompt
                 }
             ],
@@ -488,17 +446,12 @@ No hype.
 
     except Exception as e:
 
-        print(
-            "GROQ ERROR:",
-            e
-        )
+        print("GROQ ERROR:", e)
 
-        return (
-            "AI analysis unavailable."
-        )
+        return "AI analysis unavailable."
 
 # =========================================================
-# FORMAT
+# FORMAT RESULT
 # =========================================================
 
 def format_result(team, stats, ai):
@@ -594,7 +547,7 @@ async def analyze(message: Message):
             return
 
         # =================================================
-        # SCRAP
+        # SCRAP PAGE
         # =================================================
 
         await msg.edit_text(
@@ -614,12 +567,10 @@ async def analyze(message: Message):
             return
 
         # =================================================
-        # MATCHES
+        # EXTRACT MATCHES
         # =================================================
 
-        matches = extract_matches(
-            html
-        )
+        matches = extract_matches(html)
 
         if not matches:
 
@@ -630,7 +581,7 @@ async def analyze(message: Message):
             return
 
         # =================================================
-        # STATS
+        # CALCULATE STATS
         # =================================================
 
         stats = calculate_stats(
@@ -647,7 +598,7 @@ async def analyze(message: Message):
             return
 
         # =================================================
-        # AI
+        # AI ANALYSIS
         # =================================================
 
         await msg.edit_text(
@@ -675,10 +626,7 @@ async def analyze(message: Message):
 
     except Exception as e:
 
-        print(
-            "HANDLER ERROR:",
-            e
-        )
+        print("HANDLER ERROR:", e)
 
         await message.answer(
             "❌ Internal error"
