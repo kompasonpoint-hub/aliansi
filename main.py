@@ -1,25 +1,25 @@
 # =========================================================
-# DYNAMIC FOOTBALL SCRAPER BOT
-# FULL MAIN.PY
-# SEARCH ONLY REQUESTED TEAM
-# FLASHSCORE SCRAPER
+# MAIN.PY
+# ULTRA FOOTBALL SCRAPER BOT
+# DIRECT FLASHSCORE SEARCH ENGINE
+# FIXED VERSION
 # =========================================================
 
 # INSTALL:
-# pip install aiogram requests beautifulsoup4 lxml cloudscraper
+# pip install aiogram requests cloudscraper beautifulsoup4 lxml
 
 # =========================================================
 # IMPORT
 # =========================================================
 
 import asyncio
+import json
 import re
 import statistics
 import time
-import requests
+
 import cloudscraper
 
-from urllib.parse import quote
 from bs4 import BeautifulSoup
 from aiogram import Bot, Dispatcher
 from aiogram.types import Message
@@ -29,22 +29,24 @@ from aiogram.filters import CommandStart
 # CONFIG
 # =========================================================
 
-BOT_TOKEN = "8962278856:AAEVOkunN5NY3qlgl_SFwXpBgkWPGQGBqro"
-GROQ_API_KEY = "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"
+BOT_TOKEN = "ISI_BOT_TOKEN"
 
 HEADERS = {
     "User-Agent":
     (
         "Mozilla/5.0 "
         "(Windows NT 10.0; Win64; x64)"
-    )
+    ),
+
+    "Accept":
+        "application/json,text/html"
 }
 
 # =========================================================
 # BOT
 # =========================================================
 
-bot = Bot(token=BOT_TOKEN)
+bot = Bot(8962278856:AAEVOkunN5NY3qlgl_SFwXpBgkWPGQGBqro)
 
 dp = Dispatcher()
 
@@ -55,67 +57,100 @@ scraper = cloudscraper.create_scraper()
 # =========================================================
 
 MENU = """
-⚽ DYNAMIC FOOTBALL ANALYZER
+⚽ FOOTBALL ANALYZER BOT
 
 Ketik nama team:
 
 Contoh:
 - persib
-- manchester united
 - real madrid
 - arsenal
+- manchester united
 
 BOT AKAN:
 ✅ cari team otomatis
 ✅ scrap statistik live
-✅ analisa form
-✅ over/under trend
+✅ analisa performa
+✅ over under trend
 ✅ BTTS trend
-✅ prediction confidence
+✅ confidence prediction
 """
 
 # =========================================================
-# SEARCH TEAM URL
+# SEARCH TEAM FROM FLASHSCORE
 # =========================================================
 
-def search_team_url(team_name):
+def search_team(team_name):
 
     try:
 
-        query = quote(
-            f"site:flashscore.com/team/ {team_name}"
+        url = (
+            "https://s.livesport.services/api/v2/search/"
+            f"?q={team_name}"
+            "&lang-id=1"
+            "&sport-ids=1"
+            "&type-ids=1"
         )
 
-        google_url = (
-            f"https://www.google.com/search?q={query}"
-        )
-
-        html = scraper.get(
-            google_url,
+        r = scraper.get(
+            url,
             headers=HEADERS,
             timeout=20
-        ).text
-
-        # cari url flashscore
-        matches = re.findall(
-            r'https:\/\/www\.flashscore\.com\/team\/[^"]+',
-            html
         )
 
-        if not matches:
+        data = r.json()
+
+        results = data.get(
+            "results",
+            []
+        )
+
+        if not results:
+
+            print("NO SEARCH RESULT")
+
             return None
 
-        # ambil pertama
-        url = matches[0]
+        item = results[0]
 
-        # bersihkan
-        url = url.split("&")[0]
+        name = item.get(
+            "name",
+            "Unknown"
+        )
 
-        return url
+        slug = item.get(
+            "url",
+            ""
+        )
+
+        if not slug:
+
+            print("NO SLUG")
+
+            return None
+
+        final_url = (
+            "https://www.flashscore.com/team/"
+            f"{slug}/"
+        )
+
+        print(
+            f"[FOUND] {name}"
+        )
+
+        return {
+
+            "name": name,
+
+            "url": final_url
+        }
 
     except Exception as e:
 
-        print("SEARCH ERROR:", e)
+        print(
+            "SEARCH ERROR:",
+            e
+        )
 
         return None
 
@@ -137,7 +172,10 @@ def scrap_team_page(url):
 
     except Exception as e:
 
-        print("SCRAP ERROR:", e)
+        print(
+            "SCRAP ERROR:",
+            e
+        )
 
         return None
 
@@ -154,53 +192,94 @@ def extract_matches(html):
             "lxml"
         )
 
-        text = soup.get_text(
-            " ",
-            strip=True
-        )
+        scripts = soup.find_all("script")
 
-        # regex score
-        pattern = (
-            r'([A-Za-z\s\.\-]+)\s'
-            r'(\d)-(\d)\s'
-            r'([A-Za-z\s\.\-]+)'
-        )
+        all_text = ""
 
-        raw = re.findall(pattern, text)
-
-        results = []
-
-        for m in raw[:15]:
+        for s in scripts:
 
             try:
 
-                home = m[0].strip()
+                all_text += s.text
 
-                hs = int(m[1])
+            except:
+                pass
 
-                aw = int(m[2])
+        # cari score pattern
+        pattern = (
+            r'"home":"([^"]+)".+?'
+            r'"away":"([^"]+)".+?'
+            r'"homeScore":(\d+).+?'
+            r'"awayScore":(\d+)'
+        )
 
-                away = m[3].strip()
+        raw = re.findall(
+            pattern,
+            all_text,
+            re.DOTALL
+        )
 
-                results.append({
+        matches = []
 
-                    "home": home,
+        for m in raw[:10]:
 
-                    "away": away,
+            try:
 
-                    "hs": hs,
+                matches.append({
 
-                    "aw": aw
+                    "home": m[0],
+
+                    "away": m[1],
+
+                    "hs": int(m[2]),
+
+                    "aw": int(m[3])
                 })
 
             except:
                 continue
 
-        return results
+        # fallback regex biasa
+        if not matches:
+
+            text = soup.get_text(
+                " ",
+                strip=True
+            )
+
+            fallback = re.findall(
+
+                r'([A-Za-z\s\.\-]+)\s(\d)-(\d)\s([A-Za-z\s\.\-]+)',
+
+                text
+            )
+
+            for m in fallback[:10]:
+
+                try:
+
+                    matches.append({
+
+                        "home": m[0].strip(),
+
+                        "away": m[3].strip(),
+
+                        "hs": int(m[1]),
+
+                        "aw": int(m[2])
+                    })
+
+                except:
+                    continue
+
+        return matches
 
     except Exception as e:
 
-        print("EXTRACT ERROR:", e)
+        print(
+            "EXTRACT ERROR:",
+            e
+        )
 
         return []
 
@@ -213,21 +292,21 @@ def calculate_stats(matches, team_name):
     if not matches:
         return None
 
+    team_name = team_name.lower()
+
     wins = 0
 
     draws = 0
 
     losses = 0
 
-    goals_for = []
+    gf = []
 
-    goals_against = []
+    ga = []
 
     over25 = 0
 
     btts = 0
-
-    team_name = team_name.lower()
 
     for m in matches:
 
@@ -235,33 +314,42 @@ def calculate_stats(matches, team_name):
 
         away = m["away"].lower()
 
-        # detect side
-        is_home = team_name in home
+        is_home = (
+            team_name in home
+        )
 
-        gf = m["hs"] if is_home else m["aw"]
+        scored = (
+            m["hs"]
+            if is_home
+            else m["aw"]
+        )
 
-        ga = m["aw"] if is_home else m["hs"]
+        conceded = (
+            m["aw"]
+            if is_home
+            else m["hs"]
+        )
 
-        goals_for.append(gf)
+        gf.append(scored)
 
-        goals_against.append(ga)
+        ga.append(conceded)
 
         # result
-        if gf > ga:
+        if scored > conceded:
             wins += 1
 
-        elif gf == ga:
+        elif scored == conceded:
             draws += 1
 
         else:
             losses += 1
 
         # over
-        if gf + ga >= 3:
+        if scored + conceded >= 3:
             over25 += 1
 
-        # btts
-        if gf > 0 and ga > 0:
+        # BTTS
+        if scored > 0 and conceded > 0:
             btts += 1
 
     played = len(matches)
@@ -277,19 +365,34 @@ def calculate_stats(matches, team_name):
         "losses": losses,
 
         "win_rate":
-            round((wins / played) * 100, 1),
+            round(
+                (wins / played) * 100,
+                1
+            ),
 
         "avg_goals_for":
-            round(statistics.mean(goals_for), 2),
+            round(
+                statistics.mean(gf),
+                2
+            ),
 
         "avg_goals_against":
-            round(statistics.mean(goals_against), 2),
+            round(
+                statistics.mean(ga),
+                2
+            ),
 
         "over25_rate":
-            round((over25 / played) * 100, 1),
+            round(
+                (over25 / played) * 100,
+                1
+            ),
 
         "btts_rate":
-            round((btts / played) * 100, 1)
+            round(
+                (btts / played) * 100,
+                1
+            )
     }
 
 # =========================================================
@@ -312,24 +415,35 @@ def generate_prediction(stats):
     if stats["btts_rate"] >= 60:
         score += 1
 
-    # main pick
     if score >= 4:
 
-        main_pick = "Over 2.5 Goals"
+        trend = (
+            "Strong attacking trend"
+        )
 
-        trend = "Strong offensive trend"
+        pick = (
+            "Over 2.5 Goals"
+        )
 
     elif score >= 2:
 
-        main_pick = "Double Chance"
+        trend = (
+            "Moderate positive form"
+        )
 
-        trend = "Moderate positive form"
+        pick = (
+            "Double Chance"
+        )
 
     else:
 
-        main_pick = "Avoid high-risk bets"
+        trend = (
+            "Unstable trend"
+        )
 
-        trend = "Unstable form"
+        pick = (
+            "Avoid high-risk bets"
+        )
 
     confidence = min(
         85,
@@ -340,7 +454,7 @@ def generate_prediction(stats):
 
         "trend": trend,
 
-        "main_pick": main_pick,
+        "pick": pick,
 
         "confidence": confidence
     }
@@ -349,7 +463,7 @@ def generate_prediction(stats):
 # FORMAT RESULT
 # =========================================================
 
-def format_result(team, stats, pred, url):
+def format_result(team, stats, pred):
 
     return f"""
 🏆 TEAM ANALYSIS
@@ -358,13 +472,10 @@ def format_result(team, stats, pred, url):
 ⚽ Team:
 {team}
 
-🔗 Source:
-{url}
-
 📊 STATISTICS
 ━━━━━━━━━━━━━━━
 
-Matches Analyzed:
+Matches:
 {stats['played']}
 
 Wins:
@@ -385,10 +496,10 @@ Avg Goals Scored:
 Avg Goals Conceded:
 {stats['avg_goals_against']}
 
-Over 2.5 Rate:
+Over 2.5:
 {stats['over25_rate']}%
 
-BTTS Rate:
+BTTS:
 {stats['btts_rate']}%
 
 📈 ANALYSIS
@@ -398,7 +509,7 @@ Trend:
 {pred['trend']}
 
 Suggested Pick:
-{pred['main_pick']}
+{pred['pick']}
 
 Confidence:
 {pred['confidence']}/100
@@ -406,9 +517,9 @@ Confidence:
 ⚠️ NOTE
 ━━━━━━━━━━━━━━━
 
-This prediction is statistics-based.
-Football remains highly unpredictable.
-Avoid treating analysis as certainty.
+Statistical model only.
+Football remains unpredictable.
+Avoid assuming certainty.
 """
 
 # =========================================================
@@ -429,12 +540,15 @@ async def analyze(message: Message):
 
     try:
 
-        team_name = message.text.strip()
+        query = (
+            message.text
+            .strip()
+        )
 
-        if not team_name:
+        if not query:
             return
 
-        if team_name.startswith("/"):
+        if query.startswith("/"):
             return
 
         msg = await message.answer(
@@ -442,12 +556,12 @@ async def analyze(message: Message):
         )
 
         # =================================================
-        # SEARCH TEAM URL
+        # SEARCH TEAM
         # =================================================
 
-        url = search_team_url(team_name)
+        team = search_team(query)
 
-        if not url:
+        if not team:
 
             await msg.edit_text(
                 "❌ Team not found"
@@ -456,19 +570,21 @@ async def analyze(message: Message):
             return
 
         # =================================================
-        # SCRAP
+        # SCRAP TEAM PAGE
         # =================================================
 
         await msg.edit_text(
-            "⚡ Scraping live statistics..."
+            "⚡ Scraping statistics..."
         )
 
-        html = scrap_team_page(url)
+        html = scrap_team_page(
+            team["url"]
+        )
 
         if not html:
 
             await msg.edit_text(
-                "❌ Failed scraping data"
+                "❌ Failed scraping page"
             )
 
             return
@@ -477,7 +593,9 @@ async def analyze(message: Message):
         # EXTRACT MATCHES
         # =================================================
 
-        matches = extract_matches(html)
+        matches = extract_matches(
+            html
+        )
 
         if not matches:
 
@@ -493,13 +611,13 @@ async def analyze(message: Message):
 
         stats = calculate_stats(
             matches,
-            team_name
+            team["name"]
         )
 
         if not stats:
 
             await msg.edit_text(
-                "❌ Failed calculating statistics"
+                "❌ Failed calculating stats"
             )
 
             return
@@ -508,17 +626,18 @@ async def analyze(message: Message):
         # PREDICTION
         # =================================================
 
-        pred = generate_prediction(stats)
+        pred = generate_prediction(
+            stats
+        )
 
         # =================================================
-        # FINAL RESULT
+        # FINAL
         # =================================================
 
         result = format_result(
-            team_name.title(),
+            team["name"],
             stats,
-            pred,
-            url
+            pred
         )
 
         await msg.edit_text(
@@ -527,7 +646,10 @@ async def analyze(message: Message):
 
     except Exception as e:
 
-        print("HANDLER ERROR:", e)
+        print(
+            "HANDLER ERROR:",
+            e
+        )
 
         await message.answer(
             "❌ Internal error"
@@ -540,7 +662,7 @@ async def analyze(message: Message):
 async def main():
 
     print(
-        "DYNAMIC FOOTBALL SCRAPER BOT RUNNING"
+        "ULTRA FOOTBALL BOT RUNNING"
     )
 
     await dp.start_polling(bot)
@@ -559,6 +681,9 @@ if __name__ == "__main__":
 
         except Exception as e:
 
-            print("MAIN ERROR:", e)
+            print(
+                "MAIN ERROR:",
+                e
+            )
 
             time.sleep(5)
